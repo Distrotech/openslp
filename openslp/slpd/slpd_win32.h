@@ -69,9 +69,6 @@
     #define MAX_PATH    256
 #endif
 
-#define strncasecmp(String1, String2, Num) strnicmp(String1, String2, Num)
-#define strcasecmp(String1, String2, Num) stricmp(String1, String2, Num)
-
 typedef DWORD               pid_t;
 typedef DWORD               uid_t;
 typedef int                 socklen_t;
@@ -86,6 +83,10 @@ typedef enum _SLPDAction
     SLPD_INSTALL = 1,
     SLPD_REMOVE  = 2
 } SLPDAction;
+
+
+/* definition for inet_aton() since Microsoft does not have this yet */
+#define inet_aton(opt,bind) ((bind)->s_addr = inet_addr(opt))
 
 
 /*=========================================================================*/
