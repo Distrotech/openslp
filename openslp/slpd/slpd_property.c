@@ -77,6 +77,7 @@ char* GetHostname(char** hostfdn)
 
     char            host[MAX_HOST_NAME];
     struct hostent* he;
+    struct in_addr  ifaddr;
 
     *hostfdn = 0;
 
@@ -85,7 +86,19 @@ char* GetHostname(char** hostfdn)
         he = gethostbyname(host);
         if(he)
         {
-            *hostfdn = xstrdup(he->h_name);
+            /* if the hostname has a '.' then it is probably a qualified 
+             * domain name.  If it is not then we better use the IP address
+             */
+            if(strchr(he->h_name,'.'))
+            {
+                *hostfdn = xstrdup(he->h_name);
+            }
+            else
+            {
+                ifaddr.s_addr = *((unsigned long*)he->h_addr);
+                *hostfdn = xstrdup(inet_ntoa(ifaddr));
+            }
+            
         }
     }
 
@@ -205,17 +218,22 @@ int SLPDPropertyInit(const char* conffile)
     /*-------------------------------------------------------------*/
     G_SlpdProperty.isDA = SLPPropertyAsBoolean(SLPPropertyGet("net.slp.isDA"));
     G_SlpdProperty.activeDADetection = SLPPropertyAsBoolean(SLPPropertyGet("net.slp.activeDADetection"));               
-    if(G_SlpdProperty.isDA)
+    
+    if(G_SlpdProperty.activeDADetection)
     {
-        /* DAs do perform passiveDADetection */
-        G_SlpdProperty.passiveDADetection = SLPPropertyAsBoolean(SLPPropertyGet("net.slp.passiveDADetection"));                   
+        G_SlpdProperty.DAActiveDiscoveryInterval = atoi(SLPPropertyGet("net.slp.DAActiveDiscoveryInterval"));
+        if(G_SlpdProperty.DAActiveDiscoveryInterval > 1 &&
+           G_SlpdProperty.DAActiveDiscoveryInterval < SLPD_CONFIG_DA_FIND )
+        {
+            G_SlpdProperty.DAActiveDiscoveryInterval = SLPD_CONFIG_DA_FIND;
+        }
     }
     else
     {
-        /* SAs do not do passiveDADetection */
-        G_SlpdProperty.passiveDADetection = 0;
+        G_SlpdProperty.DAActiveDiscoveryInterval = 0;
     }
-
+    
+    G_SlpdProperty.passiveDADetection = SLPPropertyAsBoolean(SLPPropertyGet("net.slp.passiveDADetection"));                   
     G_SlpdProperty.isBroadcastOnly = SLPPropertyAsBoolean(SLPPropertyGet("net.slp.isBroadcastOnly"));
     G_SlpdProperty.multicastTTL = atoi(SLPPropertyGet("net.slp.multicastTTL"));
     G_SlpdProperty.multicastMaximumWait = atoi(SLPPropertyGet("net.slp.multicastMaximumWait"));
@@ -286,9 +304,9 @@ int SLPDPropertyInit(const char* conffile)
     /* Set other values used internally */
     /*----------------------------------*/
     G_SlpdProperty.DATimestamp = 1;  /* DATimestamp must start at 1 */
-    G_SlpdProperty.activeDiscoveryXmits = 3;
-    G_SlpdProperty.nextPassiveDAAdvert = 0;
-    G_SlpdProperty.nextActiveDiscovery = 0;
+    G_SlpdProperty.activeDiscoveryXmits = 3; /* ensures xmit on first 3 calls to SLPDKnownDAActiveDiscovery() */
+    G_SlpdProperty.nextActiveDiscovery = 0;  /* ensures xmit on first call to SLPDKnownDAActiveDiscovery() */
+    G_SlpdProperty.nextPassiveDAAdvert = 0;  /* ensures xmit on first call to SLPDKnownDAPassiveDiscovery()*/
 
     return 0;
 }
