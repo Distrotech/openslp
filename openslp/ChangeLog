@@ -1,12 +1,239 @@
 ============================================================================
-OpenSLP Change Log
-------------------
+OpenSLP Change Log (stable-1-0)
+-------------------------------
 Please make entries to this log (in addition to the CVS log) that describe 
 major changes to the OpenSLP code base.  An entries should be separated by
 blank lines and include the date, developer's email, and change description.
 =============================================================================
+
+*** Tag OpenSLP-1.0.8 ***
+
+02/25/02 matt@caldera.com
+Added patch from Arun Barboza to handle '==' SLPv1 predicates.  This patch
+allows better interoperability with Novell SLP networks.
+
+02/13/02 matt@caldera.com
+Added fix from Arun Barboza to make V1 DAAdverts use the same encoding as
+the request
+
+02/13/02 matt@caldera.com
+Fixed a problem in SLPProcessMessage where errorcodes were not being returned
+resulting in attempts to send non-allocated sendbufs (i.e. SEGV).
+
+02/13/02 matt@caldera.com
+Fixed a problem where SLPReg() would hang if used against a DA or SA that
+prematurely dropped connections
+
+02/05/02 matt@caldera.com
+Force use of numeric IP addresses in all DAAdvert and SAAdvert messages.
+
+02/05/02 matt@caldera.com
+Fixed bug where idle connections to DAs were not being aged.
+
+02/05/02 matt@caldera.com
+Added code so that 'slptool -v' will return the path of the slp.conf file
+libslp.so is configured to use.
+
+*** Tag OpenSLP-1.0.7 ***
+
+01/25/02 matt@caldera.com
+Fixed all documentation to reflect use of the new net.slp.multicastIF setting
+
+01/24/02 matt@caldera.com
+Changed all instances of close() where socket descriptors are closed
+to closesocket() on WIN32
+
+01/24/02 matt@caldera.com
+Applied patch from Juergen Kreileder that provides the net.slp.multicastIF
+slp.conf setting.  net.slp.multicastIF is useful in setting up OpenSLP on
+multi-homed machines where it is desireable to configure which interface 
+should send multicast traffic.
+
+01/24/02 matt@caldera.com
+Applied patch from Garth Bushell that fixes a problem where not enough
+memory was being allocated to hold an escaped string in SLPEscape(). 
+
+01/17/02 matt@caldera.com
+Fixed some problems with multicast route handling code in the slpd 
+startup script
+
+12/20/01 matt@caldera.com
+Moved Win2000 specific defines inside #ifdef WIN32
+
+12/14/01 matt@caldera.com
+Changed slpd "daemonize" code to chdir() to "/"
+
+*** Tag OpenSLP-1.0.6 ***
+
+12/04/01 matt@caldera.com
+Applied patch from Tim Zurcher that sets FRESH flag for registrations.
+OpenSLP ignores this flag, but other DA implementations like K&A SLP do not.
+
+11/21/01 matt@caldera.com
+Made a change to the outgoing socket send code that unlinks the sendbuf 
+from the send list before it is sent.  This way if there is a reconnect
+failure and the socket is SLPDSocketFree()d then the sendbuf won't be
+SLPBufferFree()d twice.  This fixes a SEGV in the SA when a DA goes down 
+during a transaction.
+
+*** Tag OpenSLP-1.0.5 ***
+
+11/15/01 matt@caldera.com
+Added Timothy Zurcher to the THANKS file.  He deserves it!
+
+11/13/01 matt@caldera.com
+Minor changes to the way that settings from /etc/slp.conf affect active and 
+passive discovery.
+
+11/10/01 matt@caldera.com
+Applied fix from Tim Zurcher that makes it so that errorcodes for
+service-agent and directory-agent SrvRqsts are returned correctly.
+
+11/09/01 matt@caldera.com
+Fixed possible SEGV when reconnect to DA failed.  With out this change
+it would be possible to need a NULL socket structure to the outgoing
+socket list.  This would be very bad.
+
+11/07/01 matt@caldera.com
+Properly rooted startup scripts
+
+11/2/01 matt@caldera.com
+Changed declaration and definition for strncasecmp and strcasecmp so that
+there is only one place for them in slp_compare.c and slp_compare.h
+
+11/1/01 matt@caldera.com
+Honor scopes in SrvRqsts for the special "service:directory-agent" type
+
+10/31/01 matt@caldera.com
+Fixed problem with SLPEscape() as patched by Timothy Zurcher
+
+*** Tag OpenSLP-1.0.4 ***
+
+10/18/01 matt@caldera.com
+Added code to use IP address in agent url for those operating systems where
+gethostname() does not return a fully qualified domain name (FQDN).
+
+10/17/01 matt@caldera.com
+Applied patch from Tim Zurcher to fix memory realloc problems when messages 
+exceed the SLP MTU of 1400 bytes.
+
+10/17/01 matt@caldera.com
+Fixed SEGV when operating with Mac OS/x which insists on sending corrupt
+SLP messages.  Thanks to Ernie Stepson for reporting this problem.
+
+10/16/01 matt@caldera.com
+Added code to log parse errors and dump bad messages to the log
+
+10/16/01 matt@caldera.com
+Fixed parse error conditional in slpd message processing code where some bad
+messages could cause SEGV of slpd.
+
+10/16/01 matt@caldera.com
+Fixed problem where libslp.so would loop tightly if SLPReg() and SLPDereg()
+were called after previously contacted slpd had died.
+
+10/15/01 matt@caldera.com
+Fixed problem where empty message was sent when talking to more than
+one statically configured DA.  Patch from Timothy Zurcher.
+
+*** Tag OpenSLP-1.0.3 ***
+
+10/09/01 matt@caldera.com
+Fixed "srvdereg too long bug" discovered by Timothy Zurcher 
+
+10/09/01 matt@caldera.com
+Changed install script so that it does not erase existing configuration files
+
+10/08/01 matt@caldera.com
+Fixed reconnect code to be able to interoperate with inefficient DAs that
+close the stream after each srvreg/srvack exchange.  The Mac OS/X DA is 
+reported to have this problem
+
+10/08/01 matt@caldera.com
+Fixed "sendbuf 2 bytes too long" as suggested by Timothy Zurcher
+
+09/25/01 matt@caldera.com
+Fixed inet_aton() on Win32
+
+09/19/01 matt@caldera.com
+Fixed configure scripts so that -lresolv is used on Solaris
+
+09/17/01 matt@caldera.com
+Removed calls that (sort of) enforce service-url checking.  This is for the
+benefit of AFP's usage of SRVLOC.  Developers are now trusted not to 
+register ambiguous service-urls.
+
+09/17/01 matt@caldera.com
+Applied Tomasz K?oczko patch for automake 1.5
+
+*** Tag OpenSLP-1.0.2 ***
+
+09/12/01 matt@caldera.com
+Added slpd startup script for linux that automatically adds the multicast
+route if one is not found
+
+09/05/01 matt@caldera.com
+Added calls to inet_aton() that are used before call to gethostbyname()
+which should reduce name lookups and allow OpenSLP be configured to work in 
+environments where name resolution is not set up.
+
+08/31/01 matt@caldera.com
+Changed code path for handling of directory-agent SrvRqst.  Fixes problems
+DAs listed in net.slp.DAAddresses could not be found if multicast was not
+working
+
+08/30/01 matt@caldera.com
+Fixed a few debug problems when last handle is closed.  Fixed KnownDA usage
+SLPFindScopes() to bypass the cache
+
+08/13/01 matt@caldera.com
+Applied patch by Tomasz K³oczko that fixes build with configure 2.5x
+
+08/10/01 matt@caldera.com
+Applied patch from Jim Meyer that fixes several predicate parsing
+irregularities.
+
+08/08/01 rganesan@myrealbox.com
+Minor compilation and bug fixes: typecast char to int when passed to is*() 
+functions, fix size of Attribute Reply buf etc.
+
+*** Tag OpenSLP-1.0.1 ***
+
+08/03/01 rganesan@myrealbox.com
+Updated epm list file.
+
+08/02/01 matt@caldera.com
+Fixed included strncasecmp() as suggested by Timothy Zurcher
+
+08/01/01 matt@caldera.com
+Applied change from Kai T Solehmainen that fix a broadcast problem on Win32
+
+08/01/01 matt@caldera.com
+Fixed bug in libslp that resulted in net.slp.activeDADetection and
+net.slp.DADiscoveryMaximumWait being ignored in the known DA discovery code
+
+07/25/01 matt@caldera.com
+Fixed minor KnownDAEcho problem that resulted in some DAs not getting
+registrations.
+
+07/25/01 matt@caldera.com
+Fixed Database "initialization" order so that LOCAL or (API registered)
+services will be preserved on reset or SIGHUP
+
+07/25/01 matt@caldera.com
+Applied Michael Sweet's patch to configure.in that allows use of CFLAGS and
+LDFLAGS
+ 
+07/25/01 matt@caldera.com
+Fixed parsing problem in SLPParseSrvURL() that could cause SEGV
+
+07/23/01 matt@caldera.com
+Branched CVS into HEAD and stable-1.0.  This is the stable branch.
+
+*** Tag OpenSLP 1.0.0 ****
+
 07/18/01 matt@caldera.com
-Fixed several very minor memory leaks in slpd
+Fixed couple very minor memory leaks in slpd
 
 07/13/01 matt@caldera.com
 Fixed slp.conf parsing problem when properties are set to empty string
@@ -102,8 +329,6 @@ Added debug memory allocator
 
 04/18/01 matt@caldera.com
 Added support for net.slp.OpenSLPversion property
-
-
 
 *** Tag OpenSLP 0.8.3 ***
 

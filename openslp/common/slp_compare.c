@@ -48,12 +48,41 @@
 /***************************************************************************/
 
 #include <string.h>
+#include <ctype.h>
 
 #include "slp_compare.h"
 
+
 #ifdef WIN32
-#define strncasecmp(string1, string2, n) strnicmp(string1, string2, n)
+#else
+#ifndef HAVE_STRNCASECMP
+int
+strncasecmp(const char *s1, const char *s2, size_t len)
+{
+    while ( *s1 && (*s1 == *s2 || tolower(*s1) == tolower(*s2)) )
+    {
+        len--;
+        if(len == 0) return 0;
+        s1++;
+        s2++;
+    }
+    return(int) *(unsigned char *)s1 - (int) *(unsigned char *)s2;
+}
 #endif
+#ifndef HAVE_STRCASECMP
+int
+strcasecmp(const char *s1, const char *s2)
+{
+    while ( *s1 && (*s1 == *s2 || tolower(*s1) == tolower(*s2)) )
+    {
+        s1++;
+        s2++;
+    }
+    return(int) *(unsigned char *)s1 - (int) *(unsigned char *)s2;
+}
+#endif
+#endif 
+
 
 /*=========================================================================*/
 int SLPCompareString(int str1len,
@@ -480,6 +509,11 @@ int SLPCheckServiceUrlSyntax(const char* srvurl,
  *
  *=========================================================================*/
 {
+    /* TODO: Do we actually need to do something here to ensure correct
+     * service-url syntax, or should we expect that it will be used
+     * by smart developers who know that ambiguities could be encountered
+     * if they don't?
+     
     if(srvurllen < 8)
     {
         return 1;
@@ -490,8 +524,9 @@ int SLPCheckServiceUrlSyntax(const char* srvurl,
         return 1;
     }        
    
-    /* TODO: make this a little smarter */
-   
+    return 0;
+    */
+
     return 0;
 }
  

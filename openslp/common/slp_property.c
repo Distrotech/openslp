@@ -187,7 +187,7 @@ int SetDefaultValues()
     result |= SLPPropertySet("net.slp.maxResults","256");
     result |= SLPPropertySet("net.slp.DADiscoveryTimeouts","500,750,1000,1500,2000,3000");
     result |= SLPPropertySet("net.slp.DADiscoveryMaximumWait","2000");
-    result |= SLPPropertySet("net.slp.DAActiveDiscoveryInterval","900");
+    result |= SLPPropertySet("net.slp.DAActiveDiscoveryInterval","1");
     result |= SLPPropertySet("net.slp.DAAddresses","");
     result |= SLPPropertySet("net.slp.activeDADetection","true");
     result |= SLPPropertySet("net.slp.passiveDADetection","true");
@@ -251,6 +251,9 @@ int SLPPropertyReadFile(const char* conffile)
     {
         goto CLEANUP;
     }
+
+    /* Set the property that keeps track of conffile */
+    SLPPropertySet("net.slp.OpenSLPConfigFile",conffile);
 
     while(fgets(alloced,4096,fp))
     {
