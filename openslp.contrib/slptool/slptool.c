@@ -186,28 +186,6 @@ void FindSrvs(SLPToolCommandLine* cmdline)
 }
 
 /*=========================================================================*/
-void FindScopes(SLPToolCommandLine* cmdline)
-/*=========================================================================*/
-{
-    SLPError    result;
-    SLPHandle   hslp;
-    char*       scopes;
-
-    if(SLPOpen(cmdline->lang,SLP_FALSE,&hslp) == SLP_OK)
-    {
-        result = SLPFindScopes(hslp,&scopes);
-        if(result == SLP_OK)
-	{
-	   printf("%s\n",scopes);
-	   SLPFree(scopes);
-	}
-       
-        SLPClose(hslp);
-    }               
-}
-
-
-/*=========================================================================*/
 int ParseCommandLine(int argc,char* argv[], SLPToolCommandLine* cmdline)
 /* Returns  Zero on success.  Non-zero on error.
 /*=========================================================================*/
@@ -305,10 +283,6 @@ int ParseCommandLine(int argc,char* argv[], SLPToolCommandLine* cmdline)
                 cmdline->cmdparam1 = argv[i];
             }                             
         }
-        else if(strcasecmp(argv[i],"findscopes") == 0)
-        {
-	    cmdline->cmd = FINDSCOPES;
-	}
         else
         {
             return 1;
@@ -330,8 +304,7 @@ void DisplayUsage()
     printf("   command-and-arguments may be:\n");
     printf("      findsrvs service-type [filter]\n");
     printf("      findattrs url [attrids]\n");
-    printf("      findsrvtypes [authority]\n");
-    printf("      findscopes\n");
+    printf("      findsrvtypes [authority]\n");    
 }
 
 
@@ -361,10 +334,6 @@ int main(int argc, char* argv[])
         case FINDSRVTYPES:
             FindSrvTypes(&cmdline);
             break;
-	
-	case FINDSCOPES:
-	    FindScopes(&cmdline);
-	    break;
         
         case GETPROPERTY:
 //            GetProperty(&cmdline);
