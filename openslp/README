@@ -1,4 +1,4 @@
-OpenSLP README
+Openslp README
 ===============
 
 1 - Introduction
@@ -16,32 +16,30 @@ The OpenSLP project is an effort to develop an open-source implementation of
 Service Location Protocol suitable for commercial and non-commercial 
 application.
 
-The latest version of OpenSLP is 0.9.1  Release notes for this version follow:
+The latest stable version of OpenSLP is 1.0.9.  OpenSLP-1.0.9 contains
+a few minor bug fixes that some OpenSLP users will be interested in.
+Most of all, OpenSLP 1.0.9 probably represents the last official
+release of the 1.0.x branch.  Subsequent releases will only be made if
+serious bug fixes are needed.  Otherwise, all changes will be made to
+the development 1.1.x branch.   
 
-OpenSLP 0.9.1 is a bug fix release.  It does not offer any new features, but
-since some the fixed bugs were fairly serious it highly recommended that
-0.9.0 users upgrade. 
+Those that are investigating OpenSLP as part of a development or
+porting project should look at the 1.1.x development releases.  This
+is where the development action will be.  Those that are deploying
+OpenSLP in production systems should continue to look at OpenSLP
+1.0.9 until the 1.1.x code becomes stable enought for production use.
 
-The following is a shortened list changes for 0.9.1: 
-- Fixes all known bugs (SourceForge bug tracker 
-  http://sourceforge.net/tracker/?group_id=1730&atid=101730 for details)
-- Minor build changes for BSD
-- Fixed up broken SLPv1 support.Changed includes of the form 
-  "../common/header.h" to "header.h" because of potential breakage for
-  non source directory builds.
-- Added a EPM slp.list.in file and updated configure.in. EPM is an Easy 
-  Package Manager (http://www.easysw.com/epm) that allows easy creation of 
-  different packaging formats.)
-       
+
 2 - Roadmap
 ------------
-OpenSLP is getting very close to being released in beta form.  It is 
-currently useable for most applications, but still lacks a few important
-features:
+The first phase of OpenSLP is now complete.  The OpenSLP 1.0.x branch
+is now frozen. The CVS repository has been branched to allow new 
+development for the next major release of OpenSLP.  OpenSLP 1.1.x will be
+the main development branch that will be used to implement revisions and
+features currently under discussion on the Service Location Protocol mailing lists
+(see http://srvloc.org).  For more roadmap information please see 
+http://openslp.org/roadmap.html.
     
-    - libslp does not collate results for syncronous calls
-    - libslp does not support asyncronous calls
-
 
 3 - Building OpenSLP
 ---------------------

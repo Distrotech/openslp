@@ -198,6 +198,7 @@ void HandleSigTerm()
     #endif
     SLPDDatabaseDeinit();
     SLPDPropertyDeinit();
+    SLPDLogFileClose();
     xmalloc_deinit();    
 #endif
 
@@ -390,6 +391,11 @@ int Daemonize(const char* pidfile)
             /* TODO: should we log here and return fail */
         }
     }
+
+    /*--------------------*/
+    /* Set cwd to / (root)*/
+    /*--------------------*/
+    chdir("/");
 
     return 0;
 }

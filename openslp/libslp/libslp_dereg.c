@@ -130,7 +130,7 @@ SLPError ProcessSrvDeReg(PSLPHandleInfo handle)
     /* determine the size of the fixed portion of the SRVDEREG           */
     /*-------------------------------------------------------------------*/
     bufsize += handle->params.dereg.scopelistlen + 2; /*  2 bytes for len field*/
-    bufsize += handle->params.dereg.urllen + 8;       /*  1 byte for reserved  */
+    bufsize += handle->params.dereg.urllen + 6;       /*  1 byte for reserved  */
                                                       /*  2 bytes for lifetime */
                                                       /*  2 bytes for urllen   */
                                                       /*  1 byte for authcount */
@@ -196,18 +196,12 @@ SLPError ProcessSrvDeReg(PSLPHandleInfo handle)
     /*--------------------------*/
     /* Call the RqstRply engine */
     /*--------------------------*/
-    do
+    sock = NetworkConnectToSA(handle,
+                              handle->params.reg.scopelist,
+                              handle->params.reg.scopelistlen,
+                              &peeraddr);
+    if(sock >= 0)
     {
-        sock = NetworkConnectToSA(handle,
-                                  handle->params.dereg.scopelist,
-                                  handle->params.dereg.scopelistlen,
-                                  &peeraddr);
-        if(sock == -1)
-        {
-            result = SLP_NETWORK_INIT_FAILED;
-            break;
-        }
-
         result = NetworkRqstRply(sock,
                                  &peeraddr,
                                  handle->langtag,
@@ -216,13 +210,15 @@ SLPError ProcessSrvDeReg(PSLPHandleInfo handle)
                                  bufsize,
                                  CallbackSrvDeReg,
                                  handle);
-        if(result)
+        if (result)
         {
             NetworkDisconnectSA(handle);
-        }
-
-    }while(result == SLP_NETWORK_ERROR);
-
+        }   
+    }
+    else
+    {
+        result = SLP_NETWORK_INIT_FAILED;
+    }
 
     FINISHED:
     if(buf) xfree(buf);

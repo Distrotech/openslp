@@ -83,16 +83,15 @@ void OutgoingDatagramRead(SLPList* socklist, SLPDSocket* sock)
                          0,
                          (struct sockaddr *) &(sock->peeraddr),
                          &peeraddrlen);
-    if(bytesread > 0)
+    if ( bytesread > 0 )
     {
         sock->recvbuf->end = sock->recvbuf->start + bytesread;
 
         SLPDProcessMessage(&(sock->peeraddr),
                            sock->recvbuf,
                            &(sock->sendbuf));
-/*       
-        SLPDSocketFree((SLPDSocket*)SLPListUnlink(socklist,(SLPListItem*)sock));
-*/
+
+        /* Completely ignore the message */
     }
 }
 
@@ -106,28 +105,50 @@ void OutgoingStreamReconnect(SLPList* socklist, SLPDSocket* sock)
 #else    
     int                 fdflags;
 #endif
-    /*----------------------------------------------------------------*/
-    /* Make sure we have not reconnected too many times               */
-    /*----------------------------------------------------------------*/
-    sock->reconns += 1;
-    if(sock->reconns > SLPD_CONFIG_MAX_RECONN)
+
+    /*-----------------------------------------------------------------*/
+    /* If socket is already being reconnected but is reconnect blocked */
+    /* just return.  Blocking connect sockets will eventually time out */
+    /*-----------------------------------------------------------------*/
+    if(sock->state == STREAM_CONNECT_BLOCK)
     {
-        sock->state = SOCKET_CLOSE;
         return;
     }
-    
+
+    #ifdef DEBUG
+    /* Log that reconnect warning */
+    SLPDLog("WARNING: Reconnect to agent at %s.  Agent may not be making efficient \n"
+            "         use of TCP.\n",
+            inet_ntoa(sock->peeraddr.sin_addr));
+    #endif
+
+    /*----------------------------------------------------------------*/
+    /* Make sure we have not reconnected too many times               */
+    /* We only allow SLPD_CONFIG_MAX_RECONN reconnection retries      */
+    /* before we stop                                                 */
+    /*----------------------------------------------------------------*/
+    sock->reconns += 1;
+    if ( sock->reconns > SLPD_CONFIG_MAX_RECONN )
+    {
+        sock->state = SOCKET_CLOSE;
+        SLPDLog("WARNING: Reconnect tries to agent at %s exceeded maximum. It\n"
+                "         is possible that the agent is malicious.  Check it out!\n",
+                inet_ntoa(sock->peeraddr.sin_addr));
+        return;
+    }
+
     /*----------------------------------------------------------------*/
     /* Close the existing socket to clean the stream  and open an new */
     /* socket                                                         */
     /*----------------------------------------------------------------*/
     CloseSocket(sock->fd);
     sock->fd = socket(PF_INET,SOCK_STREAM,0);
-    if(sock->fd < 0)
+    if ( sock->fd < 0 )
     {
         sock->state = SOCKET_CLOSE;
         return;
     }
-    
+
     /*---------------------------------------------*/
     /* Set the new socket to enable nonblocking IO */
     /*---------------------------------------------*/
@@ -138,18 +159,19 @@ void OutgoingStreamReconnect(SLPList* socklist, SLPDSocket* sock)
     fdflags = fcntl(sock->fd, F_GETFL, 0);
     fcntl(sock->fd,F_SETFL, fdflags | O_NONBLOCK);
 #endif
-    
+
+
     /*--------------------------*/
     /* Connect a the new socket */
     /*--------------------------*/
-    if(connect(sock->fd, 
-               (struct sockaddr *)&(sock->peeraddr), 
-               sizeof(struct sockaddr_in)))
+    if ( connect(sock->fd, 
+                 (struct sockaddr *)&(sock->peeraddr), 
+                 sizeof(struct sockaddr_in)) )
     {
 #ifdef WIN32
-        if(WSAEWOULDBLOCK == WSAGetLastError())
+        if ( WSAEWOULDBLOCK == WSAGetLastError() )
 #else
-        if(errno == EINPROGRESS)
+        if ( errno == EINPROGRESS )
 #endif
         {
             /* Connect blocked */
@@ -169,10 +191,11 @@ void OutgoingStreamRead(SLPList* socklist, SLPDSocket* sock)
 /*-------------------------------------------------------------------------*/
 {
     int     bytesread;
+    int     recvlen;
     char    peek[16];
     int     peeraddrlen = sizeof(struct sockaddr_in);
 
-    if(sock->state == STREAM_READ_FIRST)
+    if ( sock->state == STREAM_READ_FIRST )
     {
         /*---------------------------------------------------*/
         /* take a peek at the packet to get size information */
@@ -183,26 +206,57 @@ void OutgoingStreamRead(SLPList* socklist, SLPDSocket* sock)
                              MSG_PEEK,
                              (struct sockaddr *)&(sock->peeraddr),
                              &peeraddrlen);
-        if(bytesread > 0)
+        if ( bytesread > 0 )
         {
+            
+            /* Check the version */
+            if (*peek == 2)
+            {
+                recvlen = AsUINT24(peek + 2);
+            }
+            else if (*peek == 1) /* SLPv1 packet */
+            {
+                recvlen = AsUINT16(peek + 2);
+            }
+            else
+            {
+                /* Version not supported */
+                SLPDLog("WARNING - Version %i not supported from %s",
+                        *peek,    
+                        inet_ntoa(sock->peeraddr.sin_addr));
+                sock->state = SOCKET_CLOSE;
+                return;
+            }
+            
+            /* Check the recvlen for a sane value */
+            recvlen = AsUINT24(peek+2);
+            if(recvlen > 0xffff)
+            {
+                SLPDLog("WARNING - Message too large. %i bytes from %s",
+                        recvlen,    
+                        inet_ntoa(sock->peeraddr.sin_addr));
+                sock->state = SOCKET_CLOSE;
+                return;
+            }
+            
             /* allocate the recvbuf big enough for the whole message */
-            sock->recvbuf = SLPBufferRealloc(sock->recvbuf,AsUINT24(peek+2));
-            if(sock->recvbuf)
+            sock->recvbuf = SLPBufferRealloc(sock->recvbuf,recvlen);
+            if ( sock->recvbuf )
             {
                 sock->state = STREAM_READ;
             }
             else
             {
-                SLPDLog("INTERNAL_ERROR - out of memory!\n");
+                SLPDLog("ERROR - out of memory");
                 sock->state = SOCKET_CLOSE;
             }
         }
         else
         {
 #ifdef WIN32
-            if(WSAEWOULDBLOCK != WSAGetLastError())
+            if ( WSAEWOULDBLOCK != WSAGetLastError() )
 #else
-            if(errno != EWOULDBLOCK)
+            if ( errno != EWOULDBLOCK )
 #endif
             {
                 /* Error occured or connection was closed. Try to reconnect */
@@ -212,7 +266,7 @@ void OutgoingStreamRead(SLPList* socklist, SLPDSocket* sock)
         }       
     }
 
-    if(sock->state == STREAM_READ)
+    if ( sock->state == STREAM_READ )
     {
         /*------------------------------*/
         /* recv the rest of the message */
@@ -221,7 +275,7 @@ void OutgoingStreamRead(SLPList* socklist, SLPDSocket* sock)
                          sock->recvbuf->curpos,
                          sock->recvbuf->end - sock->recvbuf->curpos,
                          0);
-        if(bytesread > 0)
+        if ( bytesread > 0 )
         {
             /* reset age because of activity */
             sock->age = 0;
@@ -230,11 +284,11 @@ void OutgoingStreamRead(SLPList* socklist, SLPDSocket* sock)
             sock->recvbuf->curpos += bytesread;
 
             /* check to see if everything was read */
-            if(sock->recvbuf->curpos == sock->recvbuf->end)
+            if ( sock->recvbuf->curpos == sock->recvbuf->end )
             {
-                switch(SLPDProcessMessage(&(sock->peeraddr),
-                                          sock->recvbuf,
-                                          &(sock->sendbuf)))
+                switch ( SLPDProcessMessage(&(sock->peeraddr),
+                                            sock->recvbuf,
+                                            &(sock->sendbuf)) )
                 {
                 case SLP_ERROR_DA_BUSY_NOW:
                     sock->state = STREAM_WRITE_WAIT;
@@ -246,8 +300,13 @@ void OutgoingStreamRead(SLPList* socklist, SLPDSocket* sock)
                 default:
                     /* End of outgoing message exchange. Unlink   */
                     /* send buf from to do list and free it       */
-                    SLPBufferFree((SLPBuffer)SLPListUnlink(&(sock->sendlist),(SLPListItem*)(sock->sendbuf)));
+                    SLPBufferFree(sock->sendbuf);
+                    sock->sendbuf = NULL;
                     sock->state = STREAM_WRITE_FIRST;
+                    /* clear the reconnection count since we actually
+                     * transmitted a successful message exchange
+                     */
+                    sock->reconns = 0;
                     break;
                 }
             }
@@ -255,9 +314,9 @@ void OutgoingStreamRead(SLPList* socklist, SLPDSocket* sock)
         else
         {
 #ifdef WIN32
-            if(WSAEWOULDBLOCK != WSAGetLastError())
+            if ( WSAEWOULDBLOCK != WSAGetLastError() )
 #else
-            if(errno != EWOULDBLOCK)
+            if ( errno != EWOULDBLOCK )
 #endif
             {
                 /* Error occured or connection was closed. Try to reconnect */
@@ -265,7 +324,6 @@ void OutgoingStreamRead(SLPList* socklist, SLPDSocket* sock)
                 OutgoingStreamReconnect(socklist,sock);
             }
         }
-
     }
 }
 
@@ -281,18 +339,20 @@ void OutgoingStreamWrite(SLPList* socklist, SLPDSocket* sock)
     flags = MSG_DONTWAIT;
 #endif
 
-    if(sock->state == STREAM_WRITE_FIRST)
+    if ( sock->state == STREAM_WRITE_FIRST )
     {
-        /* make sure that there is something to do list */
-        sock->sendbuf = (SLPBuffer)sock->sendlist.head;
-        if(sock->sendbuf == 0)
+        /* set sendbuf to the first item in the send list if it is not set */
+        if(sock->sendbuf == NULL)
         {
-            /* there is nothing in the to do list */
-            sock->state = STREAM_CONNECT_IDLE;
-            /* reset the reconnect count because the socket */
-            /* appears to be healthy again                  */
-            sock->reconns = 0;
-            return;
+            sock->sendbuf = (SLPBuffer)sock->sendlist.head;
+            if ( sock->sendbuf == NULL )
+            {
+                /* there is nothing in the to do list */
+                sock->state = STREAM_CONNECT_IDLE;
+                return;
+            }
+            /* Unlink the send buffer we are sending from the send list */
+            SLPListUnlink(&(sock->sendlist),(SLPListItem*)(sock->sendbuf));
         }
 
         /* make sure that the start and curpos pointers are the same */
@@ -300,22 +360,22 @@ void OutgoingStreamWrite(SLPList* socklist, SLPDSocket* sock)
         sock->state = STREAM_WRITE;
     }
 
-    if(sock->sendbuf->end - sock->sendbuf->start > 0)
+    if ( sock->sendbuf->end - sock->sendbuf->start > 0 )
     {
         byteswritten = send(sock->fd,
                             sock->sendbuf->curpos,
                             sock->sendbuf->end - sock->sendbuf->start,
                             flags);
-        if(byteswritten > 0)
+        if ( byteswritten > 0 )
         {
             /* reset age because of activity */
             sock->age = 0; 
-
+            
             /* move buffer pointers */
             sock->sendbuf->curpos += byteswritten;
 
             /* check to see if everything was written */
-            if(sock->sendbuf->curpos == sock->sendbuf->end)
+            if ( sock->sendbuf->curpos == sock->sendbuf->end )
             {
                 /* Message is completely sent. Set state to read the reply */
                 sock->state = STREAM_READ_FIRST;
@@ -324,9 +384,9 @@ void OutgoingStreamWrite(SLPList* socklist, SLPDSocket* sock)
         else
         {
 #ifdef WIN32
-            if(WSAEWOULDBLOCK != WSAGetLastError())
+            if ( WSAEWOULDBLOCK != WSAGetLastError() )
 #else
-            if(errno != EWOULDBLOCK)
+            if ( errno != EWOULDBLOCK )
 #endif
             {
                 /* Error occured or connection was closed. Try to reconnect */
@@ -334,6 +394,14 @@ void OutgoingStreamWrite(SLPList* socklist, SLPDSocket* sock)
                 OutgoingStreamReconnect(socklist,sock);
             }
         }
+    }
+    else
+    {
+        /* nothing to write */
+#ifdef DEBUG
+        SLPDLog("yikes, an empty socket is being written!\n");
+#endif
+        sock->state = SOCKET_CLOSE;
     }
 }
 
@@ -350,12 +418,12 @@ SLPDSocket* SLPDOutgoingConnect(struct in_addr* addr)
 /*=========================================================================*/
 {
     SLPDSocket* sock = (SLPDSocket*)G_OutgoingSocketList.head;
-    while(sock)
+    while ( sock )
     {
-        if(sock->state == STREAM_CONNECT_IDLE ||
-           sock->state > SOCKET_PENDING_IO)
+        if ( sock->state == STREAM_CONNECT_IDLE ||
+             sock->state > SOCKET_PENDING_IO )
         {
-            if(sock->peeraddr.sin_addr.s_addr == addr->s_addr)
+            if ( sock->peeraddr.sin_addr.s_addr == addr->s_addr )
             {
                 break;
             }
@@ -363,10 +431,13 @@ SLPDSocket* SLPDOutgoingConnect(struct in_addr* addr)
         sock = (SLPDSocket*)sock->listitem.next;    
     }
 
-    if(sock == 0)
+    if ( sock == 0 )
     {
         sock = SLPDSocketCreateConnected(addr);
-        SLPListLinkTail(&(G_OutgoingSocketList),(SLPListItem*)sock);
+        if(sock)
+        {
+            SLPListLinkTail(&(G_OutgoingSocketList),(SLPListItem*)sock);
+        }
     }
 
     return sock;
@@ -381,23 +452,24 @@ void SLPDOutgoingDatagramWrite(SLPDSocket* sock)
 /* sock (IN) the socket that will belong on the outgoing list              */
 /*=========================================================================*/
 {
-    if(sendto(sock->fd,
-              sock->sendbuf->start,
-              sock->sendbuf->end - sock->sendbuf->start,
-              0,
-              (struct sockaddr *) &(sock->peeraddr),
-              sizeof(struct sockaddr_in)) >= 0)
+    if ( sendto(sock->fd,
+                sock->sendbuf->start,
+                sock->sendbuf->end - sock->sendbuf->start,
+                0,
+                (struct sockaddr *) &(sock->peeraddr),
+                sizeof(struct sockaddr_in)) >= 0 )
     {
         /* Link the socket into the outgoing list so replies will be */
-        /* proccessed                                                */
-        SLPListLinkHead(&G_OutgoingSocketList,(SLPListItem*)sock);
+        /* processed                                                 */
+        SLPListLinkHead(&G_OutgoingSocketList,(SLPListItem*)(sock));
     }
     else
     {
-        /* Data could not even be sent to peer, do not add to list */
-        /* free socket instead                                     */
+        #ifdef DEBUG
+        SLPDLog("ERROR: Data could not send() in SLPDOutgoingDatagramWrite()");
+        #endif
         SLPDSocketFree(sock);
-    }                       
+    }   
 }
 
 
@@ -418,11 +490,11 @@ void SLPDOutgoingHandler(int* fdcount,
 {
     SLPDSocket* sock;
     sock = (SLPDSocket*)G_OutgoingSocketList.head;
-    while(sock && *fdcount)
+    while ( sock && *fdcount )
     {
-        if(FD_ISSET(sock->fd,readfds))
+        if ( FD_ISSET(sock->fd,readfds) )
         {
-            switch(sock->state)
+            switch ( sock->state )
             {
             case DATAGRAM_MULTICAST:
             case DATAGRAM_BROADCAST:
@@ -442,9 +514,9 @@ void SLPDOutgoingHandler(int* fdcount,
 
             *fdcount = *fdcount - 1;
         }
-        else if(FD_ISSET(sock->fd,writefds))
+        else if ( FD_ISSET(sock->fd,writefds) )
         {
-            switch(sock->state)
+            switch ( sock->state )
             {
             
             case STREAM_CONNECT_BLOCK:
@@ -475,14 +547,14 @@ void SLPDOutgoingAge(time_t seconds)
     SLPDSocket* del  = 0;
     SLPDSocket* sock = (SLPDSocket*)G_OutgoingSocketList.head;
 
-    while(sock)
+    while ( sock )
     {
-        switch(sock->state)
+        switch ( sock->state )
         {
         case DATAGRAM_MULTICAST:
         case DATAGRAM_BROADCAST:
         case DATAGRAM_UNICAST:
-            if(sock->age > G_SlpdProperty.unicastMaximumWait / 1000)
+            if ( sock->age > G_SlpdProperty.unicastMaximumWait / 1000 )
             {
                 del = sock;
             }
@@ -493,22 +565,25 @@ void SLPDOutgoingAge(time_t seconds)
         case STREAM_WRITE_FIRST:
             sock->age = 0;
             break;
+        
         case STREAM_CONNECT_BLOCK:
         case STREAM_READ:
         case STREAM_WRITE:
-            if(G_OutgoingSocketList.count > SLPD_COMFORT_SOCKETS)
+            if ( G_OutgoingSocketList.count > SLPD_COMFORT_SOCKETS )
             {
-                /* Accellerate ageing cause we are low on sockets */
-                if(sock->age > SLPD_CONFIG_BUSY_CLOSE_CONN )
+                /* Accelerate ageing cause we are low on sockets */
+                if ( sock->age > SLPD_CONFIG_BUSY_CLOSE_CONN )
                 {
+                    /* Remove peer from KnownDAs since it might be dead */
                     SLPDKnownDARemove(&(sock->peeraddr.sin_addr));
                     del = sock;
                 }
             }
             else
             {
-                if(sock->age > SLPD_CONFIG_CLOSE_CONN)
+                if ( sock->age > SLPD_CONFIG_CLOSE_CONN )
                 {
+                    /* Remove peer from KnownDAs since it might be dead */
                     SLPDKnownDARemove(&(sock->peeraddr.sin_addr));
                     del = sock;
                 }
@@ -516,7 +591,27 @@ void SLPDOutgoingAge(time_t seconds)
             sock->age = sock->age + seconds;
             break;
 
+        case STREAM_CONNECT_IDLE:
+            if ( G_OutgoingSocketList.count > SLPD_COMFORT_SOCKETS )
+            {
+                /* Accelerate ageing cause we are low on sockets */
+                if ( sock->age > SLPD_CONFIG_BUSY_CLOSE_CONN )
+                {
+                    del = sock;
+                }
+            }
+            else
+            {
+                if ( sock->age > SLPD_CONFIG_CLOSE_CONN )
+                {
+                    del = sock;
+                }
+            }
+            sock->age = sock->age + seconds;
+            break;
+
         case STREAM_WRITE_WAIT:
+            /* this when we are talking to a busy DA */
             sock->age = 0;
             sock->state = STREAM_WRITE_FIRST;
             break;
@@ -528,14 +623,13 @@ void SLPDOutgoingAge(time_t seconds)
 
         sock = (SLPDSocket*)sock->listitem.next;
 
-        if(del)
+        if ( del )
         {
             SLPDSocketFree((SLPDSocket*)SLPListUnlink(&G_OutgoingSocketList,(SLPListItem*)del));
             del = 0;
         }
     }                                                 
 }
-
 
 /*=========================================================================*/
 int SLPDOutgoingInit()
@@ -550,7 +644,7 @@ int SLPDOutgoingInit()
     /*------------------------------------------------------------*/
     /* First, remove all of the sockets that might be in the list */
     /*------------------------------------------------------------*/
-    while(G_OutgoingSocketList.count)
+    while ( G_OutgoingSocketList.count )
     {
         SLPDSocketFree((SLPDSocket*)SLPListUnlink(&G_OutgoingSocketList,(SLPListItem*)G_OutgoingSocketList.head));
     }
@@ -572,21 +666,21 @@ int SLPDOutgoingDeinit(int graceful)
     SLPDSocket* del  = 0;
     SLPDSocket* sock = (SLPDSocket*)G_OutgoingSocketList.head;
 
-    while(sock)
+    while ( sock )
     {
         /* graceful only closes sockets without pending I/O */
-        if(graceful == 0)
+        if ( graceful == 0 )
         {
             del = sock;
         }
-        else if(sock->state < SOCKET_PENDING_IO)
+        else if ( sock->state < SOCKET_PENDING_IO )
         {
             del = sock;
         }
 
         sock = (SLPDSocket*)sock->listitem.next;
 
-        if(del)
+        if ( del )
         {
             SLPDSocketFree((SLPDSocket*)SLPListUnlink(&G_OutgoingSocketList,(SLPListItem*)del));
             del = 0;
