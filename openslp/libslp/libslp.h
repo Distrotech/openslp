@@ -434,32 +434,44 @@ int KnownDAGetScopes(int* scopelistlen,
 
 
 /*=========================================================================*/
+void KnownDAProcessSrvRqst(PSLPHandleInfo handle);
+/* Process a SrvRqst for service:directory-agent                           */
+/*                                                                         */
+/* handle (IN) the handle used to make the SrvRqst                         */
+/*                                                                         */
+/* returns: none                                                           */
+/*=========================================================================*/
+
+#ifdef DEBUG
+/*=========================================================================*/
 void KnownDAFreeAll();
 /* Frees all (cached) resources associated with known DAs                  */
 /*                                                                         */
 /* returns: none                                                           */
 /*=========================================================================*/
+#endif
 
 
 
 #ifdef WIN32
 #define strncasecmp(String1, String2, Num) strnicmp(String1, String2, Num)
 #define strcasecmp(String1, String2, Num) stricmp(String1, String2, Num)
+#define inet_aton(opt,bind) ((bind)->s_addr = inet_addr(opt))
 #else
 #ifndef HAVE_STRNCASECMP
 static int
 strncasecmp(const char *s1, const char *s2, size_t len)
 {
-    while ( len-- > 1 && *s1 && (*s1 == *s2 || tolower(*s1) == tolower(*s2)) )
+    while ( *s1 && (*s1 == *s2 || tolower(*s1) == tolower(*s2)) )
     {
+        len--;
+        if(len == 0) return 0;
         s1++;
         s2++;
     }
     return(int) *(unsigned char *)s1 - (int) *(unsigned char *)s2;
 }
-
 #endif
-
 #ifndef HAVE_STRCASECMP
 static int
 strcasecmp(const char *s1, const char *s2)
@@ -472,7 +484,6 @@ strcasecmp(const char *s1, const char *s2)
     return(int) *(unsigned char *)s1 - (int) *(unsigned char *)s2;
 }
 #endif
-
 #endif /*WIN32*/
 
-#endif
+#endif /*LIBSLP_H_INCLUDED*/ 
