@@ -45,7 +45,7 @@ SLPProperty* Find(const char* pcName)
             break;
         }
 
-        curProperty = curProperty->next;
+        curProperty = (SLPProperty*)curProperty->listitem.next;
     }
 
     return curProperty;
@@ -63,7 +63,9 @@ const char* SLPPropertyGet(const char* pcName)
         return existingProperty->propertyValue;
     }
 
-    return 0;
+    existingProperty = Find("notfound");
+
+    return existingProperty->propertyValue;
 }
 
 
@@ -93,15 +95,6 @@ int SLPPropertySet(const char *pcName,
             return -1;
         }
         
-        newProperty->previous = 0;
-        newProperty->next = G_SLPPropertyListHead;
-        if(G_SLPPropertyListHead)
-        {
-            G_SLPPropertyListHead->previous = newProperty;
-        }
-        
-        G_SLPPropertyListHead = newProperty;
-        
     }
     else
     {    
@@ -113,21 +106,6 @@ int SLPPropertySet(const char *pcName,
             errno = ENOMEM;
             return -1;
         }
-        
-        if(newProperty->previous)
-        {
-            newProperty->previous->next = newProperty;
-        }
-        else
-        {
-            G_SLPPropertyListHead = newProperty;
-        }
-
-        if(newProperty->next)
-        {
-            newProperty->next->previous = newProperty;
-        }
-        
     }
     
     /* set the pointers in the SLPProperty structure to point to areas of    */
@@ -138,6 +116,10 @@ int SLPPropertySet(const char *pcName,
     /* copy the passed in name and value */
     memcpy(newProperty->propertyName,pcName,pcNameSize);
     memcpy(newProperty->propertyValue,pcValue,pcValueSize);
+
+    /* Link the new property into the list */
+    ListLink((PListItem*)&G_SLPPropertyListHead,
+             (PListItem)newProperty);
 
     return 0;
 }
@@ -152,17 +134,18 @@ int SetDefaultValues()
     result |= SLPPropertySet("net.slp.isBroadcastOnly","false");
     result |= SLPPropertySet("net.slp.passiveDADetection","false");
     result |= SLPPropertySet("net.slp.activeDADetection","false");
-    result |= SLPPropertySet("net.slp.multicastTTL","255");
-    result |= SLPPropertySet("net.slp.multicastMaximumWait","15000");
+    result |= SLPPropertySet("net.slp.locale","en");
     result |= SLPPropertySet("net.slp.multicastTimeouts","");
     result |= SLPPropertySet("net.slp.DADiscoveryTimeouts","");
-    result |= SLPPropertySet("net.slp.unicastMaximumWait","15000");
     result |= SLPPropertySet("net.slp.datagramTimeouts","");
     result |= SLPPropertySet("net.slp.randomWaitBound","1000");
-    result |= SLPPropertySet("net.slp.MTU","1400");
     result |= SLPPropertySet("net.slp.interfaces","");
-    result |= SLPPropertySet("net.slp.securityEnabled","false");
     result |= SLPPropertySet("net.slp.DAAddresses","");
+    result |= SLPPropertySet("net.slp.securityEnabled","false");
+    result |= SLPPropertySet("net.slp.unicastMaximumWait","15000");
+    result |= SLPPropertySet("net.slp.multicastMaximumWait","15000");
+    result |= SLPPropertySet("net.slp.multicastTTL","255");
+    result |= SLPPropertySet("net.slp.MTU","1400");
     result |= SLPPropertySet("net.slp.useScopes","DEFAULT");
     result |= SLPPropertySet("notfound","");
 

@@ -377,7 +377,8 @@ SLPError SLPOpen(const char *pcLang, SLPBoolean isAsync, SLPHandle *phSLP);
 /*                                                                         */
 /* pcLang   A pointer to an array of characters containing the RFC 1766    */
 /*          Language Tag RFC 1766 for the natural language locale of       */
-/*          requests and registrations issued on the handle.               */
+/*          requests and registrations issued on the handle. Pass in NULL  */
+/*          or the empty string, "" to use the default locale              */
 /*                                                                         */
 /* isAsync  An SLPBoolean indicating whether the SLPHandle should be opened*/
 /*          for asynchronous operation or not.                             */
@@ -594,15 +595,15 @@ SLPError SLPFindSrvs(SLPHandle  hSLP,
 /*                                                                         */
 /*                                                                         */
 /* pcScopeList      A pointer to a char containing comma separated list of */
-/*                  scope names.  Pass in the empty string "" to find      */
-/*                  services in all the scopes the local host is           */
-/*                  configured query. May not be the NULL.                 */
+/*                  scope names.  Pass in the NULL or the empty string ""  */
+/*                  to find services in all the scopes the local host is   */
+/*                  configured query.                                      */
 /*                                                                         */
 /* pcSearchFilter   A query formulated of attribute pattern matching       */
 /*                  expressions in the form of a LDAPv3 Search Filter.     */
-/*                  If this filteris empty, i.e.  "", all services         */
-/*                  of the requested type in the specified scopes are      */
-/*                  returned.  May not be NULL.                            */
+/*                  If this filter is NULL or empty, i.e.  "", all         */
+/*                  services of the requested type in the specified scopes */
+/*                  are returned.                                          */
 /*                                                                         */
 /* callback         A callback function through which the results of the   */
 /*                  operation are reported. May not be NULL                */
@@ -647,13 +648,13 @@ SLPError SLPFindAttrs(SLPHandle   hSLP,
 /*                      string.                                            */
 /*                                                                         */
 /* pcScopeList          A pointer to a char containing a comma separated   */
-/*                      list of scope names. Pass in the empty string ""   */
-/*                      to find services in all the scopes the local host  */
-/*                      is configured query.  May not be NULL              */
+/*                      list of scope names. Pass in NULL or the empty     */
+/*                      string "" to find services in all the scopes the   */
+/*                      local host is configured query.                    */
 /*                                                                         */
 /* pcAttrIds            A comma separated list of attribute ids to return. */
-/*                      Use empty string, "", to indicate all values.      */
-/*                      Wildcards are not currently supported              */
+/*                      Use NULL or the empty string, "", to indicate all  */
+/*                      values. Wildcards are not currently supported      */
 /*                                                                         */
 /* callback             A callback function through which the results of   */
 /*                      the operation are reported.                        */
@@ -841,5 +842,32 @@ void SLPSetProperty(const char *pcName,
 /* pcValue  Null terminated string with the property value, in UTF-8       */
 /*          character encoding.                                            */
 /*=========================================================================*/
+
+
+//*=========================================================================*/
+SLPError SLPParseAttrs(const char* attrstr, 
+                       const char* id,
+                       int* valsize,
+                       const char** val);
+/*                                                                         */
+/* Used to get individual attribute values from an attribute string that   */
+/* is passed to the SLPAttrCallback                                        */
+/*                                                                         */
+/* attrstr  (IN) the attribute string as passed to SLPAttrCallback         */
+/*                                                                         */
+/* id       (IN) the ID of the attribute you want the value for            */
+/*                                                                         */
+/* valsize  (OUT) the size in bytes of the attribute value.  May be zero   */
+/*                if the ID was not found                                  */
+/*                                                                         */
+/* val      (OUT) the attribute value of the requested attribute. Maybe    */
+/*                null if ID was not found. The returned pointer points    */
+/*                back into the original attrstr. Do not free the returned */
+/*                pointer.                                                 */
+/*                                                                         */
+/* Returns: Returns SLP_PARSE_ERROR if an attribute of the specified id    */
+/*          was not found                                                  */
+/*=========================================================================*/
+
 
 #endif  /* (!defined SLP_H_INCLUDED) */
