@@ -1,12 +1,48 @@
 ============================================================================
-OpenSLP Change Log
-------------------
+OpenSLP Change Log (stable-1-0)
+-------------------------------
 Please make entries to this log (in addition to the CVS log) that describe 
 major changes to the OpenSLP code base.  An entries should be separated by
 blank lines and include the date, developer's email, and change description.
 =============================================================================
+
+*** Tag OpenSLP-1.0.1 ***
+
+08/03/01 rganesan@myrealbox.com
+Updated epm list file.
+
+08/02/01 matt@caldera.com
+Fixed included strncasecmp() as suggested by Timothy Zurcher
+
+08/01/01 matt@caldera.com
+Applied change from Kai T Solehmainen that fix a broadcast problem on Win32
+
+08/01/01 matt@caldera.com
+Fixed bug in libslp that resulted in net.slp.activeDADetection and
+net.slp.DADiscoveryMaximumWait being ignored in the known DA discovery code
+
+07/25/01 matt@caldera.com
+Fixed minor KnownDAEcho problem that resulted in some DAs not getting
+registrations.
+
+07/25/01 matt@caldera.com
+Fixed Database "initialization" order so that LOCAL or (API registered)
+services will be preserved on reset or SIGHUP
+
+07/25/01 matt@caldera.com
+Applied Michael Sweet's patch to configure.in that allows use of CFLAGS and
+LDFLAGS
+ 
+07/25/01 matt@caldera.com
+Fixed parsing problem in SLPParseSrvURL() that could cause SEGV
+
+07/23/01 matt@caldera.com
+Branched CVS into HEAD and stable-1.0.  This is the stable branch.
+
+*** Tag OpenSLP 1.0.0 ****
+
 07/18/01 matt@caldera.com
-Fixed several very minor memory leaks in slpd
+Fixed couple very minor memory leaks in slpd
 
 07/13/01 matt@caldera.com
 Fixed slp.conf parsing problem when properties are set to empty string
