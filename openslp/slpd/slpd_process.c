@@ -250,8 +250,8 @@ int ProcessDASrvRqst(SLPMessage message,
     /*---------------------------------------------------------------------*/
     /* Normal case where a remote Agent asks for a DA                      */
     /*---------------------------------------------------------------------*/
-    //*sendbuf = SLPBufferRealloc(*sendbuf, SLP_MAX_DATAGRAM_SIZE);
-    //if(*sendbuf == 0)
+    *sendbuf = SLPBufferRealloc(*sendbuf, SLP_MAX_DATAGRAM_SIZE);
+    if(*sendbuf == 0)
     {
         return SLP_ERROR_INTERNAL_ERROR;
     }
@@ -924,10 +924,10 @@ int ProcessAttrRqst(SLPMessage message,
     /*--------------------------------------------------------------*/
     /* ensure the buffer is big enough to handle the whole attrrply */
     /*--------------------------------------------------------------*/
-    size = message->header.langtaglen + 20; /* 14 bytes for header     */
+    size = message->header.langtaglen + 19; /* 14 bytes for header     */
                                             /*  2 bytes for error code */
                                             /*  2 bytes for attr-list len */
-                                            /*  2 bytes for the authcount */
+                                            /*  1 byte for the authcount */
     size += db->attrlistlen;
    
 #ifdef ENABLE_SLPv2_SECURITY

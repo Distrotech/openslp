@@ -95,16 +95,16 @@ int MakeActiveDiscoveryRqst(int ismcast, SLPBuffer* buffer)
     size_t          size;
     void*           eh;
     SLPMessage      msg;
-    SLPBuffer       result      = 0;
-    SLPBuffer       tmp         = 0;
     char*           prlist      = 0;
     size_t          prlistlen   = 0;
     int             errorcode   = 0;
-
+    SLPBuffer       tmp         = 0;
+    SLPBuffer       result      = *buffer;
+   
     /*-------------------------------------------------*/
     /* Generate a DA service request buffer to be sent */
     /*-------------------------------------------------*/
-    /* determine the size of the fixed portion of the SRVRQST         */
+    /* determine the size of the fixed portion of the SRVRQST     */
     size  = 47; /* 14 bytes for the header                        */
                 /*  2 bytes for the prlistlen                     */
                 /*  2 bytes for the srvtype length                */
@@ -358,7 +358,7 @@ void SLPDKnownDADeregisterAll(SLPMessage daadvert)
                 size += srvreg->scopelistlen;
                 /* taglistlen is always 0 */
 
-                sendbuf = SLPBufferRealloc(sendbuf, size);
+                sendbuf = SLPBufferAlloc(size);
                 if ( sendbuf )
                 {
                     /*----------------------*/
@@ -463,7 +463,6 @@ int SLPDKnownDAInit()
     /*--------------------------------------*/
     SLPDatabaseInit(&G_SlpdKnownDAs);
 
-
     /*-----------------------------------------------------------------*/
     /* Added statically configured DAs to the Known DA List by sending */
     /* active DA discovery requests directly to them                   */
@@ -481,11 +480,18 @@ int SLPDKnownDAInit()
                 while ( *slider2 && *slider2 != ',' ) slider2++;
                 *slider2++ = 0;
 
-                he = gethostbyname(slider1);
-                if ( he )
+                daaddr.s_addr = 0;
+                if(inet_aton(slider1, &daaddr) == 0)
                 {
-                    daaddr.s_addr = *((unsigned int*)(he->h_addr_list[0]));
-
+                    he = gethostbyname(slider1);
+                    if (he)
+                    {
+                        daaddr.s_addr = *((unsigned int*)(he->h_addr_list[0]));
+                    }
+                }
+                
+                if(daaddr.s_addr)
+                {
                     /*--------------------------------------------------------*/
                     /* Get an outgoing socket to the DA and set it up to make */
                     /* the service:directoryagent request                     */
@@ -570,94 +576,122 @@ int SLPDKnownDAAdd(SLPMessage msg, SLPBuffer buf)
 /* returns  Zero on success, Non-zero on error                             */
 /*=========================================================================*/
 {
-    SLPDatabaseHandle   dh;
     SLPDatabaseEntry*   entry;
     SLPDAAdvert*        entrydaadvert;
     SLPDAAdvert*        daadvert;
-    int                 result;
-
-    result = 0;
+    int                 result          = 0;
+    SLPDatabaseHandle   dh              = NULL;
 
     dh = SLPDatabaseOpen(&G_SlpdKnownDAs);
-    if ( dh )
+    if ( dh == NULL )
     {
-
-        /* daadvert is the DAAdvert message being added */
-        daadvert = &(msg->body.daadvert);
-
-        /*-----------------------------------------------------*/
-        /* Check to see if there is already an identical entry */
-        /*-----------------------------------------------------*/
-        while ( 1 )
-        {
-            entry = SLPDatabaseEnum(dh);
-            if ( entry == NULL ) break;
-
-            /* entrydaadvert is the DAAdvert message from the database */
-            entrydaadvert = &(entry->msg->body.daadvert);
-
-            /* Assume DAs are identical if their URLs match */
-            if ( SLPCompareString(entrydaadvert->urllen,
-                                  entrydaadvert->url,
-                                  daadvert->urllen,
-                                  daadvert->url) == 0 )
-            {
-
-#ifdef ENABLE_SLPv2_SECURITY                
-                if ( G_SlpdProperty.checkSourceAddr &&
-                     memcmp(&(entry->msg->peer.sin_addr),
-                            &(msg->peer.sin_addr),
-                            sizeof(struct in_addr)) )
-                {
-                    SLPDatabaseClose(dh);
-                    return SLP_ERROR_AUTHENTICATION_FAILED;
-                }
-
-                /* make sure an unauthenticated DAAdvert can't replace */
-                /* an authenticated one                                */
-                if ( entrydaadvert->authcount &&
-                     entrydaadvert->authcount != daadvert->authcount )
-                {
-                    SLPDatabaseClose(dh);
-                    return SLP_ERROR_AUTHENTICATION_FAILED;
-                }
-#endif
-
-                if ( daadvert->bootstamp != 0 &&
-                     daadvert->bootstamp <= entrydaadvert->bootstamp )
-                {
-                    /* Advertising DA must have went down then came back up */
-                    SLPDKnownDARegisterAll(msg,0);
-                }
-
-                SLPDatabaseRemove(dh,entry);
-                break;
-            }
-        }
-        if ( entry == 0 )
-        {
-            /* Advertising DA is new to us */
-            SLPDKnownDARegisterAll(msg,0);
-        }
-
-        /* Make sure the DA is not dying */
-        if ( daadvert->bootstamp != 0 )
-        {
-            /* Create and link in a new entry */
-            entry = SLPDatabaseEntryCreate(msg,buf);
-            if ( entry )
-            {
-                SLPDatabaseAdd(dh, entry);
-                SLPDLogDAAdvertisement("Addition",entry);
-            }
-            else
-            {
-                result = SLP_ERROR_INTERNAL_ERROR;
-            }
-        }
-
-        SLPDatabaseClose(dh);
+        result = SLP_ERROR_INTERNAL_ERROR;
+        goto CLEANUP;
     }
+
+    /* daadvert is the DAAdvert message being added */
+    daadvert = &(msg->body.daadvert);
+
+    /*-----------------------------------------------------*/
+    /* Check to see if there is already an identical entry */
+    /*-----------------------------------------------------*/
+    while ( 1 )
+    {
+        entry = SLPDatabaseEnum(dh);
+        if ( entry == NULL ) break;
+
+        /* entrydaadvert is the DAAdvert message from the database */
+        entrydaadvert = &(entry->msg->body.daadvert);
+
+        /* Assume DAs are identical if their URLs match */
+        if ( SLPCompareString(entrydaadvert->urllen,
+                              entrydaadvert->url,
+                              daadvert->urllen,
+                              daadvert->url) == 0 )
+        {
+
+            #ifdef ENABLE_SLPv2_SECURITY                
+            if ( G_SlpdProperty.checkSourceAddr &&
+                 memcmp(&(entry->msg->peer.sin_addr),
+                        &(msg->peer.sin_addr),
+                        sizeof(struct in_addr)) )
+            {
+                SLPDatabaseClose(dh);
+                result = SLP_ERROR_AUTHENTICATION_FAILED;
+                goto CLEANUP;
+            }
+
+            /* make sure an unauthenticated DAAdvert can't replace */
+            /* an authenticated one                                */
+            if ( entrydaadvert->authcount &&
+                 entrydaadvert->authcount != daadvert->authcount )
+            {
+                SLPDatabaseClose(dh);
+                result = SLP_ERROR_AUTHENTICATION_FAILED;
+                goto CLEANUP;
+            }
+            #endif
+
+            if ( daadvert->bootstamp != 0 &&
+                 daadvert->bootstamp <= entrydaadvert->bootstamp )
+            {
+                /* Advertising DA must have went down then came back up */
+                SLPDKnownDARegisterAll(msg,0);
+            }
+
+            /* Remove the entry that is the same as the advertised entry */
+            /* so that we can put the new advertised entry back in       */
+            SLPDatabaseRemove(dh,entry);
+            break;
+        }
+    }
+
+    if ( entry == 0 )
+    {
+        /* Advertising DA is new to us */
+        SLPDKnownDARegisterAll(msg,0);
+    }
+    else
+    {
+        /* The advertising DA is not new to us, but the old entry   */
+        /* has been deleted from our database so that tne new entry */
+        /* with its up to date time stamp can be put back in        */
+    }
+
+    /* Make sure the DA is not dying */
+    if ( daadvert->bootstamp != 0 )
+    {
+        /* Create and link in a new entry */
+        entry = SLPDatabaseEntryCreate(msg,buf);
+        if ( entry )
+        {
+            SLPDatabaseAdd(dh, entry);
+            SLPDLogDAAdvertisement("Addition",entry);
+        }
+        else
+        {
+            result = SLP_ERROR_INTERNAL_ERROR;
+            goto CLEANUP;
+        }
+    }
+    else
+    {
+        /* Dying DAs are not recorded in our database */
+        goto CLEANUP;
+    }
+
+    SLPDatabaseClose(dh);
+
+    return result;
+
+CLEANUP:
+    /* If we are here, we need to cleanup the message descriptor and the  */
+    /* message buffer because they were not added to the database and not */
+    /* cleaning them up would result in a memory leak                     */
+    /* We also need to make sure the Database handle is closed.           */
+    SLPMessageFree(msg);
+    SLPBufferFree(buf);
+    if(dh) SLPDatabaseClose(dh);
 
     return result;
 }
@@ -815,6 +849,7 @@ int SLPDKnownDAGenerateMyDAAdvert(int errorcode,
 
 
 
+
     /*-------------------------------------------------------------*/
     /* ensure the buffer is big enough to handle the whole srvrply */
     /*-------------------------------------------------------------*/
@@ -916,6 +951,7 @@ int SLPDKnownDAGenerateMyDAAdvert(int errorcode,
         result->curpos = result->curpos + 2;
 #endif
 
+
         /* authblock count */
 #ifdef ENABLE_SLPv2_SECURITY
         if ( daadvertauth )
@@ -989,14 +1025,14 @@ int SLPDKnownDAGenerateMyV1DAAdvert(int errorcode,
         if ( !errorcode )
         {
             size += urllen;
-            #ifndef FAKE_UNSCOPED_DA
+#ifndef FAKE_UNSCOPED_DA
             errorcode = SLPv1ToEncoding(0, &scopelistlen,
                                         encoding,
                                         G_SlpdProperty.useScopes,
                                         G_SlpdProperty.useScopesLen);
-            #else
+#else
             scopelistlen = 0;   /* pretend that we're unscoped */
-            #endif
+#endif
             if ( !errorcode )
             {
                 size += scopelistlen;
@@ -1144,11 +1180,16 @@ void SLPDKnownDAEcho(SLPMessage msg, SLPBuffer buf)
                                         entrydaadvert->scopelist) )
             {
                 /* Do not echo to ourselves if we are a DA*/
-                if ( G_SlpdProperty.isDA &&
+                if ( G_SlpdProperty.isDA  &&
                      SLPCompareString(G_SlpdProperty.myUrlLen,
                                       G_SlpdProperty.myUrl,
                                       entrydaadvert->urllen,
-                                      entrydaadvert->url) )
+                                      entrydaadvert->url) == 0 )
+                {
+                    /* don't do anything because it makes no sense to echo */
+                    /* to myself                                           */
+                }
+                else
                 {
                     /*------------------------------------------*/
                     /* Load the socket with the message to send */
@@ -1253,6 +1294,7 @@ void SLPDKnownDAPassiveDAAdvert(int seconds, int dadead)
 #ifdef ENABLE_SLPv1
     SLPDSocket*     v1sock;
 #endif
+
 
 
     /* Check to see if we should perform passive DA detection */
